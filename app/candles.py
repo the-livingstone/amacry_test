@@ -115,7 +115,7 @@ class MarketData:
         for c in self.candles_1day:
             window.append((c.ts, c.close_price))
             # keep appending days until window size is equal to n
-            if len(window) <= n:
+            if len(window) < n:
                 continue
             # calculate sma
             sma = sum(x[1] for x in window) / n
