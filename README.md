@@ -7,7 +7,7 @@ The app calculates candlesticks from raw marketdata (csv file containing timesta
 ```
 git clone https://github.com/the-livingstone/amacry_test.git
 ```
-
+### Rename env.example to .env
 ### Install [docker](https://docs.docker.com/engine/install/) and [docker-compose](https://docs.docker.com/compose/install/)
 ### Run docker-compose
 
