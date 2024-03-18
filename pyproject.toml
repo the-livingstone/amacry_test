@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "amacry-test"
+version = "0.1.0"
+description = "Test app for Amacry"
+authors = ["Alexey Serikov <serikov.alexey42@gmail.com>"]
+readme = "README.md"
+packages = [{include = "amacry_test"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+dash = "^2.14.2"
+plotly = "^5.18.0"
+pandas = "^2.1.4"
+dash-daq = "^0.5.0"
+black = "^23.12.1"
+flake8 = "^7.0.0"
+pydantic-settings = "^2.2.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

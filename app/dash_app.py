@@ -1,15 +1,13 @@
-from datetime import datetime
-from decimal import Decimal
 import os
+from pathlib import Path
 import plotly.graph_objects as go
-import plotly.express as px
 from dash import Dash, dcc, html, callback, Input, Output, ctx
 import dash_daq as daq
-from candles import MarketData, Candle
-from get_data import get_data
-import pandas as pd
+from app.candles import MarketData
+from app.get_data import get_data
+from app.config import config
 
-df = get_data(os.getenv('PRICES_URL'))
+df = get_data(Path(config.DATA_FILE))
 md = MarketData(df)
 ema = md.calc_EMA(5)
 app = Dash()
@@ -125,4 +123,8 @@ def display_candles(
     return dcc.Graph(figure=go.Figure(data=data), id='chart')
 
 
-app.run(debug=True, use_reloader=False)
+app.run(
+    debug=config.DEBUG,
+    host=config.APP_HOST,
+    port=config.APP_PORT,
+)

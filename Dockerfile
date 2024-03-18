@@ -1,18 +1,12 @@
-FROM python:3.10
-
-ENV PRICES_URL=https://perp-analysis.s3.amazonaws.com/interview/prices.csv.zip
-ENV HOST=0.0.0.0
+FROM python:3.11-alpine
 
 WORKDIR /opt
 
-COPY requirements.txt requirements.txt
+RUN apk add nano curl g++ && rm -rf /var/cache/apk/*
 
-RUN pip install -r requirements.txt
+RUN pip3 install --upgrade pip poetry
 
-EXPOSE 8050
+COPY .env poetry.lock pyproject.toml /opt/
 
-COPY . .
-
-# CMD ["pwd"]
-
-CMD ["python3", "app/app.py"]
+RUN poetry config virtualenvs.create false
+RUN poetry install --only main --no-interaction --no-ansi

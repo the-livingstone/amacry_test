@@ -1,17 +1,20 @@
 from dataclasses import dataclass, field
 from decimal import Decimal, getcontext
 from datetime import datetime
-from typing import Literal, Union
+from typing import Literal
 import pandas as pd
+from pydantic import BaseModel, Field
 
 
-PERIOD = Literal[
-    '1min',
-    '5min',
-    '1hour',
-    '1day'
-]
+PERIOD = Literal["1min", "5min", "1hour", "1day"]
 
+class Timeframe(BaseModel):
+    code: str
+    td: pd.Timedelta
+    start_date: datetime | None = None
+    quotes: list = Field(default_factory=list)
+
+    model_config=dict(arbitrary_types_allowed=True)
 @dataclass
 class Candle:
     open_price: Decimal
@@ -22,46 +25,32 @@ class Candle:
     period: PERIOD
 
     @classmethod
-    def from_prices(cls, timeframe: list[dict], period: PERIOD):
-        pd_periods = {
-            '1min': 'T',
-            '5min': '5T',
-            '1hour': 'H',
-            '1day': 'D'
-        }
-        td = pd.Timedelta(
-            5 if period == '5min' else 1,
-            pd_periods[period][-1]
-        )
+    def from_prices(cls, name: str, timeframe: Timeframe):
         if not timeframe:
             return None
-        open_ts: pd.Timestamp = timeframe[0]['TS'].floor(pd_periods[period])
-        close_ts: pd.Timestamp = open_ts + td
-        timeframe = [
-            x for x
-            in timeframe
-            if x['TS'] < close_ts
-            and x['TS'] >= open_ts
-        ]
-        open_price: Decimal = timeframe[0]['PRICE']
-        high_price: Decimal = max([x['PRICE'] for x in timeframe])
-        low_price: Decimal = min([x['PRICE'] for x in timeframe])
-        close_price: Decimal = timeframe[-1]['PRICE']
+        open_ts: pd.Timestamp = timeframe.quotes[0]["TS"].floor(timeframe.code)
+        close_ts: pd.Timestamp = open_ts + timeframe.td
+        quotes = [x for x in timeframe.quotes if x["TS"] < close_ts and x["TS"] >= open_ts]
+        open_price: Decimal = quotes[0]["PRICE"]
+        high_price: Decimal = max([x["PRICE"] for x in quotes])
+        low_price: Decimal = min([x["PRICE"] for x in quotes])
+        close_price: Decimal = quotes[-1]["PRICE"]
         return cls(
             open_price=open_price,
             high_price=high_price,
             low_price=low_price,
             close_price=close_price,
             ts=open_ts.to_pydatetime(),
-            period=period
+            period=name,
         )
-    
+
     def __lt__(self, other):
         if self.period == other.period:
             if self.ts < other.ts:
                 return True
             return False
         return None
+
 
 @dataclass
 class MarketData:
@@ -75,38 +64,36 @@ class MarketData:
         getcontext().prec = 12
         if self.quotes.empty:
             return None
-        self.quotes.sort_values(by='TS', inplace=True)
-        self.candles_1min = self.mk_candles_iterrows('1min')
-        self.candles_5min = self.mk_candles_iterrows('5min')
-        self.candles_1hour = self.mk_candles_iterrows('1hour')
-        self.candles_1day = self.mk_candles_iterrows('1day')    
-    
-    def mk_candles_iterrows(self, period: PERIOD) -> list[Candle]:
-        pd_periods = {
-            '1min': 'T',
-            '5min': '5T',
-            '1hour': 'H',
-            '1day': 'D'
+        self.quotes.sort_values(by="TS", inplace=True)
+        candles = self.mk_candles_iterrows()
+        self.candles_1min = candles["1min"]
+        self.candles_5min = candles["5min"]
+        self.candles_1hour = candles["1hour"]
+        self.candles_1day = candles["1day"]
+
+    def mk_candles_iterrows(self) -> dict[PERIOD, Candle]:
+        timeframe = {
+            "1min": Timeframe(code="T", td=pd.Timedelta(1, "T")),
+            "5min": Timeframe(code="5T", td=pd.Timedelta(5, "T")),
+            "1hour": Timeframe(code="H", td=pd.Timedelta(1, "H")),
+            "1day": Timeframe(code="D", td=pd.Timedelta(1, "D"))
         }
-        td = pd.Timedelta(
-            5 if period == '5min' else 1,
-            pd_periods[period][-1]
-        )
-        candles = []
-        start_date = None
-        candle_quotes = []
+        candles = {}
         for i, row in self.quotes.iterrows():
-            if not start_date:
-                start_date = row['TS'].floor(pd_periods[period])
-            current_ts = row['TS']
-            if current_ts < start_date + td:
-                candle_quotes.append(row)
-                continue
-            candles.append(Candle.from_prices(candle_quotes, period))
-            candle_quotes = [row]
-            start_date = row['TS'].floor(pd_periods[period])
+            for name, tf in timeframe.items():
+                if not tf.start_date:
+                    tf.start_date = row["TS"].floor(tf.code)
+                current_ts = row["TS"]
+                if current_ts < tf.start_date + tf.td:
+                    tf.quotes.append(row)
+                    continue
+                candles.setdefault(name, []).append(
+                    Candle.from_prices(name, tf)
+                )
+                tf.quotes = [row]
+                tf.start_date = row["TS"].floor(tf.code)
         return candles
-    
+
     def calc_SMA(self, n: int) -> list[tuple[datetime, Decimal]]:
         # Simple moving average is calculated as sum of close prices of candles_1day for <<n>> number of previous days,
         # divided by <<n>> for every day greater than <<n>>th day

@@ -12,4 +12,4 @@ git clone https://github.com/the-livingstone/amacry_test.git
 ```
 docker-compose up --build
 ```
-### open [@localhost:8050](http://127.0.0.1:8050) to see the interactive visualization
+### open [@localhost:8000](http://127.0.0.1:8000) to see the interactive visualization
