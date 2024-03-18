@@ -1,3 +1,5 @@
+The app calculates candlesticks from raw marketdata (csv file containing timestamp, quote price and volume) for four standard timeframes (1 min, 5 min, 1 hour, 1 day), calculates 5 day EMA indicator line and draws it on plot. The timeframe could be swithed by user in interactive fashion
+
 # Quick Start
 
 ### Clone the repo
