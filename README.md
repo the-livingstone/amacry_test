@@ -9,9 +9,9 @@ git clone https://github.com/the-livingstone/amacry_test.git
 ```
 ### Rename env.example to .env
 ### Install [docker](https://docs.docker.com/engine/install/) and [docker-compose](https://docs.docker.com/compose/install/)
-### Run docker-compose
+### Run docker compose
 
 ```
-docker-compose up --build
+docker compose up --build
 ```
 ### open [@localhost:8000](http://127.0.0.1:8000) to see the interactive visualization
