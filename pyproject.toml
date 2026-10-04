@@ -4,7 +4,10 @@ version = "0.1.0"
 description = "Test app for Amacry"
 authors = ["Alexey Serikov <serikov.alexey42@gmail.com>"]
 readme = "README.md"
-packages = [{include = "amacry_test"}]
+packages = [{ include = "app" }]
+
+[tool.poetry.scripts]
+amacry-dash = "app.dash_app:main"
 
 [tool.poetry.dependencies]
 python = "^3.11"
@@ -12,10 +15,12 @@ dash = "^2.14.2"
 plotly = "^5.18.0"
 pandas = "^2.1.4"
 dash-daq = "^0.5.0"
-black = "^23.12.1"
-flake8 = "^7.0.0"
 pydantic-settings = "^2.2.1"
 
+[tool.poetry.group.dev.dependencies]
+black = "^23.12.1"
+flake8 = "^7.0.0"
+pytest = "^8.0.0"
 
 [build-system]
 requires = ["poetry-core"]
