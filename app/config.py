@@ -14,14 +14,4 @@ class Config(BaseSettings):
         extra="ignore",
     )
 
-    @field_validator("DEBUG", mode="before")
-    @classmethod
-    def parse_debug(cls, value: object) -> bool:
-        if isinstance(value, bool):
-            return value
-        if isinstance(value, str):
-            return value.strip().lower() in ("true", "1", "yes", "on")
-        return bool(value)
-
-
 config = Config()
