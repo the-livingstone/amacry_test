@@ -1,130 +1,152 @@
-import os
 from pathlib import Path
-import plotly.graph_objects as go
-from dash import Dash, dcc, html, callback, Input, Output, ctx
+
 import dash_daq as daq
-from app.candles import MarketData
-from app.get_data import get_data
+import plotly.graph_objects as go
+from dash import Dash, Input, Output, State, callback, ctx, dcc, html
+
+from app.candles import PERIOD, MarketData
 from app.config import config
+from app.get_data import get_data
 
-df = get_data(Path(config.DATA_FILE))
-md = MarketData(df)
-ema = md.calc_EMA(5)
-app = Dash()
+PERIOD_BY_BUTTON: dict[str, PERIOD] = {
+    "candles_1min": "1min",
+    "candles_5min": "5min",
+    "candles_1hour": "1hour",
+    "candles_1day": "1day",
+}
 
-candles = go.Candlestick(
-    x=[y.ts for y in md.candles_1day],
-    open=[y.open_price for y in md.candles_1day],
-    high=[y.high_price for y in md.candles_1day],
-    low=[y.low_price for y in md.candles_1day],
-    close=[y.close_price for y in md.candles_1day],
-    name='1day'
-)
-
-ema_line = go.Line(
-    x=[e[0] for e in ema],
-    y=[e[1] for e in ema],
-    name='EMA'
-)
-
-chart = html.Div(
-    children=dcc.Graph(
-        figure=go.Figure(
-            data=[
-                candles,
-                ema_line
-            ]
-        ),
-        id='chart'
-    ),
-    id='chart_container'
-)
-
-controls = [
-    html.Div([
-        html.Button('1min', id='candles_1min', n_clicks=0),
-        html.Button('5min', id='candles_5min', n_clicks=0),
-        html.Button('1hour', id='candles_1hour', n_clicks=0),
-        html.Button('1day', id='candles_1day', n_clicks=0)
-    ]),
-    html.Div([
-        daq.NumericInput(
-                id='ema_days',
-                value=5,
-                min=1,
-                max=100,
-                label='EMA window (days)',
-                labelPosition='bottom'
-            )
-    ])
-]
+DEFAULT_PERIOD: PERIOD = "1day"
+DEFAULT_EMA_WINDOW = 5
 
 
-table = html.Table(
-    children=html.Tbody(
-        children=html.Tr(
-            children=[
-                html.Td(
-                    children=chart
-                ),
-                html.Td(
-                    children=controls
-                )
-            ]
+def _load_market_data() -> MarketData:
+    return MarketData(get_data(Path(config.DATA_FILE)))
+
+
+def build_figure(md: MarketData, period: PERIOD, ema_window: int) -> go.Figure:
+    candles = md.candles_for_period(period)
+    traces: list = [
+        go.Candlestick(
+            x=[c.ts for c in candles],
+            open=[c.open_price for c in candles],
+            high=[c.high_price for c in candles],
+            low=[c.low_price for c in candles],
+            close=[c.close_price for c in candles],
+            name=period,
         )
-    ),
-    style={
-        'width': '100%'
-    }
-)
+    ]
+    ema = md.calc_EMA(ema_window, period)
+    if ema:
+        traces.append(
+            go.Scatter(
+                x=[e[0] for e in ema],
+                y=[e[1] for e in ema],
+                mode="lines",
+                name=f"EMA {ema_window}",
+            )
+        )
+    figure = go.Figure(data=traces)
+    figure.update_layout(xaxis_rangeslider_visible=False)
+    return figure
 
-app.layout = html.Div(children=[table])
 
-@callback(
-    Output('chart_container', 'children'),
-    Input('candles_1min', 'n_clicks'),
-    Input('candles_5min', 'n_clicks'),
-    Input('candles_1hour', 'n_clicks'),
-    Input('candles_1day', 'n_clicks'),
-    Input('ema_days', 'value'),
-    Input('chart', 'figure')
-)
-def display_candles(
-        candles_1min,
-        candles_5min,
-        candles_1hour,
-        candles_1day,
-        ema_days,
-        figure: go.Figure
-    ):
-    data = figure['data']
-    period = {
-        "candles_1min": md.candles_1min, 
-        "candles_5min": md.candles_5min,
-        "candles_1hour": md.candles_1hour,
-        "candles_1day": md.candles_1day
-    }
-    if ctx.triggered_id in period:
-        candles = {
-            'x': [x.ts for x in period[ctx.triggered_id]],
-            'open': [x.open_price for x in period[ctx.triggered_id]],
-            'high': [x.high_price for x in period[ctx.triggered_id]],
-            'low': [x.low_price for x in period[ctx.triggered_id]],
-            'close': [x.close_price for x in period[ctx.triggered_id]],
-            'name': ctx.triggered_id.split('_')[1]
-        }
-        data[0] = go.Candlestick(**candles)
-    ema = md.calc_EMA(ema_days)
-    data[1] = go.Line(
-        x=[e[0] for e in ema],
-        y=[e[1] for e in ema],
-        name=f'EMA {ema_days} days'
+def create_app(md: MarketData | None = None) -> Dash:
+    market_data = md if md is not None else _load_market_data()
+    app = Dash(__name__)
+
+    app.layout = html.Div(
+        children=[
+            dcc.Store(id="active_period", data=DEFAULT_PERIOD),
+            html.Table(
+                children=html.Tbody(
+                    children=html.Tr(
+                        children=[
+                            html.Td(
+                                children=dcc.Graph(
+                                    id="chart",
+                                    figure=build_figure(
+                                        market_data, DEFAULT_PERIOD, DEFAULT_EMA_WINDOW
+                                    ),
+                                )
+                            ),
+                            html.Td(
+                                children=[
+                                    html.Div(
+                                        [
+                                            html.Button(
+                                                "1min", id="candles_1min", n_clicks=0
+                                            ),
+                                            html.Button(
+                                                "5min", id="candles_5min", n_clicks=0
+                                            ),
+                                            html.Button(
+                                                "1hour",
+                                                id="candles_1hour",
+                                                n_clicks=0,
+                                            ),
+                                            html.Button(
+                                                "1day", id="candles_1day", n_clicks=0
+                                            ),
+                                        ]
+                                    ),
+                                    html.Div(
+                                        [
+                                            daq.NumericInput(
+                                                id="ema_window",
+                                                value=DEFAULT_EMA_WINDOW,
+                                                min=1,
+                                                max=100,
+                                                label="EMA window (bars)",
+                                                labelPosition="bottom",
+                                            )
+                                        ]
+                                    ),
+                                ]
+                            ),
+                        ]
+                    )
+                ),
+                style={"width": "100%"},
+            ),
+        ]
     )
-    return dcc.Graph(figure=go.Figure(data=data), id='chart')
+
+    @callback(
+        Output("chart", "figure"),
+        Output("active_period", "data"),
+        Input("candles_1min", "n_clicks"),
+        Input("candles_5min", "n_clicks"),
+        Input("candles_1hour", "n_clicks"),
+        Input("candles_1day", "n_clicks"),
+        Input("ema_window", "value"),
+        State("active_period", "data"),
+    )
+    def update_chart(
+        _n1: int,
+        _n5: int,
+        _n1h: int,
+        _n1d: int,
+        ema_window: int | None,
+        active_period: PERIOD,
+    ) -> tuple[go.Figure, PERIOD]:
+        period = active_period
+        triggered = ctx.triggered_id
+        if triggered in PERIOD_BY_BUTTON:
+            period = PERIOD_BY_BUTTON[triggered]
+        window = ema_window if ema_window is not None else DEFAULT_EMA_WINDOW
+        return build_figure(market_data, period, window), period
+
+    return app
 
 
-app.run(
-    debug=config.DEBUG,
-    host=config.APP_HOST,
-    port=config.APP_PORT,
-)
+def main() -> None:
+    app = create_app()
+    app.run(
+        debug=config.DEBUG,
+        host=config.APP_HOST,
+        port=config.APP_PORT,
+    )
+
+
+if __name__ == "__main__":
+    main()
